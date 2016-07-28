@@ -1,0 +1,12 @@
+tmp/
+*.bcl
+*.bcl.gz
+*.bcl.bgzf
+*.xml
+*.csv
+*.filter
+*.control
+*.stats
+*.locs
+*.clocs
+*.pyc
