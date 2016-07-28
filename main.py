@@ -101,11 +101,6 @@ class Tile(object):
         self.clusters = []
 
 
-class Cluster(object):
-    def __init__(self):
-        pass
-
-
 class Read(object):
     def __init__(self, run, is_indexed_read=False):
         assert type(run) is Run
@@ -127,9 +122,11 @@ class Cycle(object):
 
     def create_bcl(self):
         f = open('tmp/s_1_1101.bcl', 'wb+')
-        f.write(int_to_32b_little_endian(self.cluster_count))
+        l = int_32_to_little_endian(self.cluster_count)
         for n in xrange(self.cluster_count):
-            f.write(chr(int(Cluster().to_byte(), 2)))
+            l.append(Cluster().to_byte())
+        b = bytearray(l)
+        f.write(b)
         f.write('\n')
         f.close()
 
@@ -142,7 +139,7 @@ class Cluster(object):
     def to_byte(self):
         assert self.base >= 0 and self.base <= 3
         assert self.quality >= 0 and self.quality <= 63
-        return bin(self.quality << 2 | self.base)[2:]
+        return (self.quality << 2 | self.base)
 
 
 def cluster_to_byte(base, quality):
@@ -167,6 +164,12 @@ def int_to_32b_little_endian(n):
         s += chr(int(c, 2))
     return s
 
+def int_32_to_little_endian(n):
+    l = []
+    for i in xrange(0, 4):
+        l.append((n >> (i * 8)) & 255)
+    return l
+
 
 def pp(elem):
     """Return a pretty-printed XML string for the Element.
@@ -184,11 +187,11 @@ if __name__ == "__main__":
 #    os.mkdir(run.gen_run_dir_name())
 #    print int_to_bin_chr(1094861636)
 #    print cluster_to_byte('c', 31)
-#    cycle = Cycle()
-#    cycle.create_bcl()
-    run = Run('miseq')
-    run.add_read()
-    run.add_read(True)
-    run.add_read()
-    run.add_read()
-    run.create_miseq_runinfo_xml()
+    cycle = Cycle()
+    cycle.create_bcl()
+#    run = Run('miseq')
+#    run.add_read()
+#    run.add_read(True)
+#    run.add_read()
+#    run.add_read()
+#    run.create_miseq_runinfo_xml()
