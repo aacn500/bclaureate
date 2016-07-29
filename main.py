@@ -42,15 +42,13 @@ class Run(object):
         self.reads.append(Read(self, is_indexed_read))
 
     def create_miseq_runinfo_xml(self):
-        root = ElementTree.Element('RunInfo',
-                {
+        root = ElementTree.Element('RunInfo', {
                     'xmlns:xsd': "http://www.w3.org/2001/XMLSchema",
                     'xmlns:xsi': "http://www.w3.org/2001/XMLSchema-instance",
                     'Version': "2"
                 })
 
-        run = ElementTree.SubElement(root, 'Run', 
-                {
+        run = ElementTree.SubElement(root, 'Run', {
                     'Id': "LongComplexIdWithLotsOfNumbers",
                     'Number': "1"
                 })
@@ -67,15 +65,13 @@ class Run(object):
         reads = ElementTree.SubElement(run, 'Reads')
 
         for i in xrange(len(self.reads)):
-            read = ElementTree.SubElement(reads, 'Read', 
-                    {
+            read = ElementTree.SubElement(reads, 'Read', {
                         "NumCycles": str(self.reads[i].num_cycles),
                         "Number": str(i+1),
-                        "IsIndexedRead": \
-                            'Y' if self.reads[i].is_indexed_read else 'N'
+                        "IsIndexedRead": 'Y' if self.reads[i].is_indexed_read
+                                         else 'N'
                     })
-        flowcell = ElementTree.SubElement(run, 'FlowcellLayout',
-                {
+        flowcell = ElementTree.SubElement(run, 'FlowcellLayout', {
                     "LaneCount": "1",
                     "SurfaceCount": "2",
                     "SwathCount": "1",
@@ -99,6 +95,9 @@ class Lane(object):
 class Tile(object):
     def __init__(self):
         self.clusters = []
+        self.cluster_count = 5000
+        for c in range(self.cluster_count):
+            self.clusters.append(Cluster())
 
 
 class Read(object):
@@ -117,14 +116,19 @@ class Read(object):
 
 
 class Cycle(object):
-    def __init__(self):
+    def __init__(self, lane_no):
         self.cluster_count = 5000
+        self.lane_no = lane_no
+        self.tiles = []
+
+    def add_tile(self):
+        self.tiles.append(Tile())
 
     def create_bcl(self, tile_no):
-        f = open('tmp/s_1_%d.bcl' % tile_no, 'wb+')
-        l = int_32_to_little_endian(self.cluster_count)
-        for n in xrange(self.cluster_count):
-            l.append(Cluster().to_byte())
+        f = open('tmp/s_%d_%d.bcl' % (self.lane_no, tile_no), 'wb+')
+        l = int_32_to_little_endian(self.tiles[tile_no].cluster_count)
+        for c in self.tiles[tile_no].clusters:
+            l.append(c.to_byte())
         b = bytearray(l)
         f.write(b)
         f.write('\n')
@@ -177,8 +181,9 @@ if __name__ == "__main__":
 #    os.mkdir(run.gen_run_dir_name())
 #    print int_to_bin_chr(1094861636)
 #    print cluster_to_byte('c', 31)
-    cycle = Cycle()
-    cycle.create_bcl(1101)
+    cycle = Cycle(1)
+    cycle.add_tile()
+    cycle.create_bcl(0)
 #    run = Run('miseq')
 #    run.add_read()
 #    run.add_read(True)
