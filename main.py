@@ -120,8 +120,8 @@ class Cycle(object):
     def __init__(self):
         self.cluster_count = 5000
 
-    def create_bcl(self):
-        f = open('tmp/s_1_1101.bcl', 'wb+')
+    def create_bcl(self, tile_no):
+        f = open('tmp/s_1_%d.bcl' % tile_no, 'wb+')
         l = int_32_to_little_endian(self.cluster_count)
         for n in xrange(self.cluster_count):
             l.append(Cluster().to_byte())
@@ -154,16 +154,6 @@ def clamp(n, minn, maxn):
     return min(max(n, minn), maxn)
 
 
-def int_to_32b_little_endian(n):
-    c = bin(n)
-    c = c[2:].zfill(32)
-    l = [c[:8], c[8:16], c[16:24], c[24:32]]
-    l.reverse()
-    s = ""
-    for c in l:
-        s += chr(int(c, 2))
-    return s
-
 def int_32_to_little_endian(n):
     l = []
     for i in xrange(0, 4):
@@ -188,7 +178,7 @@ if __name__ == "__main__":
 #    print int_to_bin_chr(1094861636)
 #    print cluster_to_byte('c', 31)
     cycle = Cycle()
-    cycle.create_bcl()
+    cycle.create_bcl(1101)
 #    run = Run('miseq')
 #    run.add_read()
 #    run.add_read(True)
