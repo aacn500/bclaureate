@@ -1,4 +1,6 @@
 #!/usr/bin/python
+
+
 from datetime import datetime
 from xml.etree import ElementTree
 from xml.dom import minidom
@@ -26,8 +28,46 @@ class Run(object):
         self.lanes = []
         self.machinename = machinename
         self.date = datetime.now().strftime("%y%m%d")
+        self.dir_name = self.gen_run_dir_name()
+        self.dir_date = self.dir_name[:6]
+        self.dir_id = self.dir_name[len(self.dir_name)-4:]
         self.reads = []
         self.cycles = []
+        self.imageparameters = {
+                "AutoOffsetFlag": "0",
+                "AutoSizeFlag": "0",
+                "Fwhm": "0",
+                "RemappingDistance": "0",
+                "Threshold": "0"
+                }
+        self.runparameters = {
+                "AutoCycleFlag": "0",
+                "BasecallFlag": "0",
+                "Deblocked": "0",
+                "DebugFlag": "0",
+                "FirstRunOnlyFlag": "0",
+                "ImagingReads": self.get_reads_dict(self.reads),
+                "Instrument": "MS6",
+                "IterativeMatrixFlag": "0",
+                "MakeFlag": "0",
+                "MaxCycle": "0",
+                "MinCycle": "0",
+                "Reads": self.get_reads_dict(self.reads),
+                "RunFolder": self.dir_name,
+                "RunFolderDate": self.dir_date,
+                "RunFolderId": self.dir_id,
+                "RunFlowcellId": "000000000-A9RLY",
+                "QTableVersion": "V6"
+                }
+
+    def get_reads_dict(self, reads):
+        d = {}
+        for read in xrange(reads):
+            d["%d" % read] = {
+                    "FirstCycle": "0",
+                    "LastCycle": "0",
+                    "RunFolder": self.dir_name
+                    }
 
     def gen_run_dir_name(self):
         return self.date +\
@@ -81,6 +121,13 @@ class Run(object):
         f = open("tmp/RunInfo.xml", 'w')
         f.write(pp(root)+'\n')
         f.close()
+
+    def mkdir_structure_miseq(self):
+        for l in self.lanes:
+            os.mkdirs(os.path.join(os.curdir, 'Data', 'Intensities', l.name))
+            for c in xrange(self.cycles):
+                os.mkdirs(os.path.join(os.curdir, 'Data', 'Intensities',
+                                       'BaseCalls', l.name, 'C%d.1' % c))
 
 
 class Lane(object):
@@ -184,9 +231,10 @@ if __name__ == "__main__":
     cycle = Cycle(1)
     cycle.add_tile()
     cycle.create_bcl(0)
-#    run = Run('miseq')
-#    run.add_read()
-#    run.add_read(True)
+    run = Run('miseq')
+    run.add_read()
+    run.add_read(True)
 #    run.add_read()
 #    run.add_read()
 #    run.create_miseq_runinfo_xml()
+    run.mkdir_structure_miseq()
