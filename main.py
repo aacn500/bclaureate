@@ -46,13 +46,13 @@ class Run(object):
                 "Deblocked": "0",
                 "DebugFlag": "0",
                 "FirstRunOnlyFlag": "0",
-                "ImagingReads": self.get_reads_dict(self.reads),
+                "ImagingReads": self.get_reads_list(self.reads),
                 "Instrument": "MS6",
                 "IterativeMatrixFlag": "0",
                 "MakeFlag": "0",
                 "MaxCycle": "0",
                 "MinCycle": "0",
-                "Reads": self.get_reads_dict(self.reads),
+                "Reads": self.get_reads_list(self.reads),
                 "RunFolder": self.dir_name,
                 "RunFolderDate": self.dir_date,
                 "RunFolderId": self.dir_id,
@@ -60,14 +60,14 @@ class Run(object):
                 "QTableVersion": "V6"
                 }
 
-    def get_reads_dict(self, reads):
-        d = {}
+    def get_reads_list(self, reads):
+        l = []
         for read in xrange(reads):
-            d["%d" % read] = {
-                    "FirstCycle": "0",
-                    "LastCycle": "0",
-                    "RunFolder": self.dir_name
-                    }
+            l.append({
+                        "FirstCycle": "0",
+                        "LastCycle": "0",
+                        "RunFolder": self.dir_name
+                     }
 
     def gen_run_dir_name(self):
         return self.date +\
@@ -79,7 +79,10 @@ class Run(object):
         self.lanes.append(Lane('L' + str(len(lanes)+1).zfill(3)))
 
     def add_read(self, is_indexed_read=False):
-        self.reads.append(Read(self, is_indexed_read))
+        new_read = Read(self, is_indexed_read)
+        self.reads.append(read)
+        self.runparameters["ImagingReads"].append(read)
+        self.runparameters["Reads"].append(read)
 
     def create_miseq_runinfo_xml(self):
         root = ElementTree.Element('RunInfo', {

@@ -10,3 +10,4 @@ tmp/
 *.locs
 *.clocs
 *.pyc
+*_FC/
