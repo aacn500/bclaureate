@@ -8,25 +8,34 @@ from Bio import bgzf
 import struct
 
 
-base_values = {
+BASE_VALUES = {
         'a': 0,
         'c': 1,
         'g': 2,
         't': 3
         }
 
-machine_types = [
+MACHINE_TYPES = [
         'miseq',
         'hiseq',
         'nextseq'
         ]
 
+LANES = 4
+SURFACES = 2
+SWATHS = 3
+SEGMENTS = 3
+CAMERAS = SEGMENTS * (LANES/2)  # 6
+TILES = 12
+MAX_CYCLES = 3
+MAX_TILES = 216
+CLUSTERS = 100
+
 
 class Run(object):
-    def __init__(self, max_lanes, machinetype, machinename="testdata"):
-        assert machinetype in machine_types
+    def __init__(self, reads, machinetype, machinename="testdata"):
+        assert machinetype in MACHINE_TYPES
         assert type(machinename) is str and len(machinename) >= 1
-        assert type(max_lanes) is int and max_lanes > 0 and max_lanes < 1000
 
         self.machinetype = machinetype
         self.machinename = machinename
@@ -35,11 +44,18 @@ class Run(object):
         self.dir_name = '_'.join([self.date, self.machinename,
                                   self.dir_id, 'FC'])
         self.lanes = []
-        for lane in xrange(1, max_lanes + 1):
+        for lane in xrange(1, LANES + 1):
             self.lanes.append(Lane(lane))
+        self.reads = []
+        for read in reads:
+            self.reads.append(read)
+
+    def add_read(self, read):
+        assert type(read) is Read
+        self.reads.append(read)
 
     def make_bcls(self):
-        """These fills contain the machine's base calls and quality scores for
+        """These files contain the machine's base calls and quality scores for
         a given tile.
         bcl files from a nextseq machine are zipped in the blocked
         GNU zip format bgzf. All others are zipped as gzips.
@@ -48,13 +64,15 @@ class Run(object):
             for tile in lane.tiles:
                 if self.machinetype is 'nextseq':
                     f = bgzf.BgzfWriter(filename=os.path.join(lane.bcpath,
+                                                              lane.prefix + 
                                                               tile.name +
                                                               '.bcl.bgzf'),
                                         mode='wb')
                     f.write(tile.as_bcl())
                     f.close()
                 else:
-                    f = open(os.path.join(lane.bcpath, tile.name + '.bcl'),
+                    f = open(os.path.join(lane.bcpath, lane.prefix + 
+                                          tile.name + '.bcl'),
                              'wb')
                     f.write(tile.as_bcl())
                     f.close()
@@ -88,18 +106,25 @@ class Run(object):
             f.close()
 
 
+class Read(object):
+    def __init__(self, num_cycles, is_indexed):
+        self.num_cycles = num_cycles
+        self.is_indexed = is_indexed
+
+
 class Lane(object):
-    def __init__(self, lane_idx, max_cycles=310, max_tiles=5):
+    def __init__(self, lane_idx):
         self.lane_idx = lane_idx
         self.name = "L" + str(lane_idx).zfill(3)
         self.cycles = []
         self.bcpath = ""
         self.locspath = ""
         self.clusters = []
-        for cycle in xrange(1, max_cycles + 1):
+        self.prefix = "{:d}_".format(lane_idx)
+        for cycle in xrange(1, MAX_CYCLES + 1):
             self.cycles.append(Cycle(cycle))
         self.tiles = []
-        for tile in xrange(1, max_tiles + 1):
+        for tile in xrange(1, MAX_TILES + 1):
             self.tiles.append(Tile(tile, self))
 
     def as_bci(self):
@@ -111,7 +136,7 @@ class Lane(object):
         l = []
         for tile in self.tiles:
             l += int_32_to_little_endian_list(tile.tile_idx)
-            l += int_32_to_little_endian_list(tile.max_clusters)
+            l += int_32_to_little_endian_list(tile.CLUSTERS)
         return bytearray(l)
 
     def as_filter(self):
@@ -124,8 +149,8 @@ class Lane(object):
         l = [0 for n in xrange(4)]
         l += int_32_to_little_endian_list(3)
         l += int_32_to_little_endian_list(len(self.clusters))
-        for cluster in xrange(len(self.clusters)):
-            l.append(self.clusters[cluster].filtered)
+        for cluster in self.clusters:
+            l.append(cluster.filtered)
         return bytearray(l)
 
     def as_locs(self):
@@ -155,10 +180,14 @@ class Cycle(object):
 
 
 class Tile(object):
-    def __init__(self, tile_idx, lane, max_clusters=4000):
+    def __init__(self, tile_idx, lane, surface, swath, camera,
+                 max_clusters=CLUSTERS):
         self.lane = lane
         self.tile_idx = tile_idx
-        self.name = str(tile_idx + 11100)
+        self.surface = surface
+        self.swath = swath
+        self.camera = camera
+        self.name = "{:d}{:d}{:d}{:02d}".format(surface, swath, camera, tile)
         self.clusters = []
         self.max_clusters = max_clusters
         for cluster in xrange(max_clusters):
@@ -208,8 +237,12 @@ def int_32_to_little_endian_list(n):
     return l
 
 if __name__ == "__main__":
+    READS = [Read(151, False), Read(8, True), Read(151, False)]
     print("Running")
-    run = Run(1, 'nextseq')
+    run = Run(READS, 1, 'nextseq')
+    run.add_read(Read(151, False))
+    run.add_read(Read(8, True))
+    run.add_read(Read(151, False))
     build_directory_structure(run)
     run.make_bcls()
     run.make_bcis()
