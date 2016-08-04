@@ -3,6 +3,5 @@ Create (random) data sets matching Illumina sequencing file formats.
 
 WIP.
 
-Requires http://biopython.org/ for zipping bgzf files
+Currently uses local install of tabix for zipping bgzf files for NextSeq data creation ie. not portable.
 
-`pip install [--user] biopython`
