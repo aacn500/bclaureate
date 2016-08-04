@@ -8,6 +8,14 @@ from xml.etree import ElementTree
 from xml.dom import minidom
 import struct
 import subprocess
+import sys
+import getopt
+
+machinetypes = [
+        "nextseq",
+        "hiseqx"]
+
+implemented = ["nextseq"]
 
 
 class RunParameters(object):
@@ -288,6 +296,20 @@ def pp(elem):
     return reparsed.toprettyxml(indent="  ")
 
 
+def usage():
+    print("Usage:")
+    print(" -m <machine type>")
+    print(" Where machine type is one of:")
+    print(" ".join(implemented))
+
+def main(argv):
+    """http://www.diveintopython.net/scripts_and_streams/command_line_arguments.html"""
+    try:
+        opts, args = getopt.getopt(argv, "m:", [])
+    except getopt.GetoptError:
+        usage()
+        sys.exit(2)
+    
 if __name__ == "__main__":
     run = Run()
     build_directory_structure(run)
