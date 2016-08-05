@@ -167,7 +167,7 @@ class Run(object):
                     f = open(os.path.join(lane.bcpath, fn), mode='wb')
                     f.write(lane.nextseq_bcl())
                     f.close()
-                    subprocess.call(["/software/solexa/pkg/tabix/current/bgzip",
+                    subprocess.call(["bgzip",
                                      os.path.join(lane.bcpath, fn)])
                     subprocess.call(["mv", os.path.join(lane.bcpath,fn+'gz'),
                                      os.path.join(lane.bcpath,fn+'bgzf')])
