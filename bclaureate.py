@@ -409,6 +409,13 @@ def build_directory_structure(run):
         lane.bcpath = os.path.join(os.getcwd(), 'Data', 'Intensities',
                                   'BaseCalls', 'L{:03d}'.format(l + 1))
 
+        if run.machinetype != "nextseq":
+            for read in run.reads:
+                for cycle in xrange(read.num_cycles):
+                    os.makedirs(os.path.join(lane.bcpath,
+                                             "C{:d}.1".format(cycle)))
+
+
 def pp(elem):
     """Return a pretty-printed XML string for given element.
     Taken from:
