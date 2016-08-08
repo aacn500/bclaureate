@@ -14,17 +14,23 @@ import getopt
 machinetypes = [
         "nextseq",
         "hiseqx",
-        "hiseq4000"]
+        "hiseq4000",
+        "miseq"
+        ]
 
 machinenames = {
         "nextseq": "NSTESTMACHINE",
         "hiseqx": "HXTESTMACHINE",
         "hiseq4000": "HFTESTMACHINE",
+        "miseq": "MSTESTMACHINE",
         }
 
-implemented = ["nextseq",
+implemented = [
+               "nextseq",
                "hiseqx",
-               "hiseq4000"]
+               "hiseq4000"
+               "miseq",
+              ]
 
 max_params = {
         "nextseq": {
@@ -45,7 +51,7 @@ max_params = {
             "lanes": 8,
             "surfaces": 2,
             "swaths": 2,
-            "tiles": 24,
+            "tiles": 28,
             "sections": 1
             },
         }
@@ -88,8 +94,8 @@ class Run(object):
         self.lanes = [Lane(lane) for lane in xrange(PARAMS["lanes"])]
         self.reads = [Read(read["num_cycles"], read["is_indexed"])
                       for read in PARAMS["reads"]]
-        self.id = "{}_{}_{:04d}".format(PARAMS["date"], machinenames[machinetype],
-                                    random.randint(0, 9999))
+        self.id = "{}_{}_{:04d}".format(PARAMS["date"], machinenames[machinetype]
+                                    , random.randint(0, 9999))
         self.infopath = ""
 
     def make_runinfo(self, machinetype):
