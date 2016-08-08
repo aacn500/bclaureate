@@ -10,6 +10,7 @@ import struct
 import subprocess
 import sys
 import getopt
+import math
 
 machinetypes = [
         "nextseq",
@@ -28,7 +29,7 @@ machinenames = {
 implemented = [
                "nextseq",
                "hiseqx",
-               "hiseq4000"
+               "hiseq4000",
                "miseq",
               ]
 
@@ -54,24 +55,16 @@ max_params = {
             "tiles": 28,
             "sections": 1
             },
+        "miseq": {
+            "lanes": 1,
+            "surfaces": 2,
+            "swaths": 1,
+            "tiles": 19,
+            "sections": 1
+            },
         }
-"""
-class RunParameters(object):
-    def __init__(self):
-        self.lanes = 4
-        self.surfaces = 2
-        self.swaths = 3
-        self.tiles = 12
-        self.sections = 3
-        self.max_tiles = 216
-        self.clusters = 2000
-        self.flowcellname = "TESTFLOWCELL"
-        self.date = datetime.now().strftime("%y%m%d")
-        self.reads = [{"num_cycles": 1, "is_indexed": False},
-                      {"num_cycles": 1, "is_indexed": False}]
 
-PARAMS = RunParameters()
-"""
+
 PARAMS = {
         "lanes": 4,
         "surfaces": 2,
@@ -84,7 +77,7 @@ PARAMS = {
         "date": datetime.now().strftime("%y%m%d"),
         "reads": [{"num_cycles": 1, "is_indexed": False},
                   {"num_cycles": 1, "is_indexed": False}],
-        "dims": {"width": 3188, "height": 7241}
+        "dims": {"width": 2048, "height": 7241}
         }
 
 class Run(object):
@@ -140,66 +133,68 @@ class Run(object):
  
         flowcell = ElementTree.SubElement(run, "FlowcellLayout", flowcellparams)
 
-        tile_names = "FiveDigit" if machinetype == "nextseq" \
-                                 else "FourDigit"
-        tileset = ElementTree.SubElement(flowcell, "TileSet", {
-            "TileNamingConvention": tile_names})
+        if machinetype == "nextseq" or machinetype == "hiseqx" or\
+            machinetype == "hiseq4000":
+            tile_names = "FiveDigit" if machinetype == "nextseq" \
+                                     else "FourDigit"
+            tileset = ElementTree.SubElement(flowcell, "TileSet", {
+                "TileNamingConvention": tile_names})
 
-        tiles = ElementTree.SubElement(tileset, "Tiles")
+            tiles = ElementTree.SubElement(tileset, "Tiles")
 
-        for lane_idx in xrange(PARAMS["lanes"]):
-            for section_idx in xrange(PARAMS["sections"]):
-                for swath_idx in xrange(PARAMS["swaths"]):
-                    for surface_idx in xrange(PARAMS["surfaces"]):
-                        for tile_idx in xrange(PARAMS["tiles"]):
-                            tile = ElementTree.SubElement(tiles, "Tile")
-                            if machinetype == "nextseq":
-                            # Section index is given by number of camera
-                            # imaging that section. Each lane has 3 sections,
-                            #
-                            #       L1     L2   |   L3     L4
-                            #      +---+  +---+ |  +---+  +---+
-                            # cam1 |   |  |   | |  |   |  |   | cam4
-                            #      |   |  |   | |  |   |  |   |
-                            #      |   |  |   | |  |   |  |   |
-                            #  ----+---+--+---+-+--+---+--+---+---
-                            # cam2 |   |  |   | |  |   |  |   | cam5
-                            #      |   |  |   | |  |   |  |   |
-                            #      |   |  |   | |  |   |  |   |
-                            #  ----+---+--+---+-+--+---+--+---+---
-                            # cam3 |   |  |   | |  |   |  |   | cam6
-                            #      |   |  |   | |  |   |  |   |
-                            #      |   |  |   | |  |   |  |   |
-                            #      +---+  +---+ |  +---+  +---+
-                            #
-                                section_offset = 1 if lane_idx < 2 else 4
-                                tile.text = "{:d}_{:d}{:d}{:d}{:02d}".format(
-                                    lane_idx + 1,
-                                    surface_idx + 1,
-                                    swath_idx + 1,
-                                    section_idx + section_offset,
-                                    tile_idx + 1)
-                            else:
-                                tile.text = "{:d}_{:d}{:d}{:02d}".format(
+            for lane_idx in xrange(PARAMS["lanes"]):
+                for section_idx in xrange(PARAMS["sections"]):
+                    for swath_idx in xrange(PARAMS["swaths"]):
+                        for surface_idx in xrange(PARAMS["surfaces"]):
+                            for tile_idx in xrange(PARAMS["tiles"]):
+                                tile = ElementTree.SubElement(tiles, "Tile")
+                                if machinetype == "nextseq":
+                                # Section index is given by number of camera
+                                # imaging that section. Each lane has 3 sections,
+                                #
+                                #       L1     L2   |   L3     L4
+                                #      +---+  +---+ |  +---+  +---+
+                                # cam1 |   |  |   | |  |   |  |   | cam4
+                                #      |   |  |   | |  |   |  |   |
+                                #      |   |  |   | |  |   |  |   |
+                                #  ----+---+--+---+-+--+---+--+---+---
+                                # cam2 |   |  |   | |  |   |  |   | cam5
+                                #      |   |  |   | |  |   |  |   |
+                                #      |   |  |   | |  |   |  |   |
+                                #  ----+---+--+---+-+--+---+--+---+---
+                                # cam3 |   |  |   | |  |   |  |   | cam6
+                                #      |   |  |   | |  |   |  |   |
+                                #      |   |  |   | |  |   |  |   |
+                                #      +---+  +---+ |  +---+  +---+
+                                #
+                                    section_offset = 1 if lane_idx < 2 else 4
+                                    tile.text = "{:d}_{:d}{:d}{:d}{:02d}".format(
                                         lane_idx + 1,
                                         surface_idx + 1,
                                         swath_idx + 1,
+                                        section_idx + section_offset,
                                         tile_idx + 1)
-        if machinetype == "hiseqx":
-            aligntophix = ElementTree.SubElement(run, "AlignToPhiX")
+                                else:
+                                    tile.text = "{:d}_{:d}{:d}{:02d}".format(
+                                            lane_idx + 1,
+                                            surface_idx + 1,
+                                            swath_idx + 1,
+                                            tile_idx + 1)
+            if machinetype == "hiseqx":
+                aligntophix = ElementTree.SubElement(run, "AlignToPhiX")
 
-        image_dims = ElementTree.SubElement(run, "ImageDimensions", {
-            "Width": "2592",
-            "Height": "1944"
-            })
+            image_dims = ElementTree.SubElement(run, "ImageDimensions", {
+                "Width": "2592",
+                "Height": "1944"
+                })
 
-        image_chans = ElementTree.SubElement(run, "ImageChannels")
+            image_chans = ElementTree.SubElement(run, "ImageChannels")
 
-        red = ElementTree.SubElement(image_chans, "Name")
-        red.text = "Red"
+            red = ElementTree.SubElement(image_chans, "Name")
+            red.text = "Red"
 
-        green = ElementTree.SubElement(image_chans, "Name")
-        green.text = "Green"
+            green = ElementTree.SubElement(image_chans, "Name")
+            green.text = "Green"
 
         f = open(os.path.join(self.infopath, 'RunInfo.xml'), 'w')
         f.write(pp(root))
@@ -252,6 +247,8 @@ class Run(object):
         if machinetype == "nextseq":
             self._make_nextseq_bcls()
         elif machinetype == "hiseqx" or machinetype == "hiseq4000":
+            self._make_hiseqx_bcls()
+        elif machinetype == "miseq":
             self._make_hiseqx_bcls()
 
 
@@ -338,6 +335,8 @@ class Run(object):
             self._make_nextseq_filters()
         elif machinetype == "hiseqx" or machinetype == "hiseq4000":
             self._make_hiseqx_filters()
+        elif machinetype == "miseq":
+            self._make_hiseqx_filters()
 
 
     def _make_nextseq_locs(self):
@@ -396,12 +395,78 @@ class Run(object):
         f.close()
 
 
+    def _make_miseq_clocs(self):
+        """https://github.com/broadinstitute/picard/blob/master/src/main/java/picard/illumina/parser/readers/ClocsFileReader.java
+        """
+        for lane in self.lanes:
+            for section in lane.sections:
+                for swath in section.swaths:
+                    for surface in swath.surfaces:
+                        for tile in surface.tiles:
+                            s = struct.pack('B', 0) # First byte in file is unused
+                            bin_size = 25
+                            image_width = PARAMS["dims"]["width"]
+                            max_x_bins = int(math.ceil(image_width / bin_size))
+                            max_y_bins = 5
+                            remaining_clusters = PARAMS["clusters"]
+
+                            # bytes 1-4: unsigned int num_bins
+                            s += struct.pack("<I", max_x_bins * max_y_bins)
+                            for y in xrange(max_x_bins * max_y_bins):
+                                cl = min(int(math.ceil(PARAMS["clusters"] / (max_x_bins * max_y_bins))),
+                                        remaining_clusters)
+                                s += struct.pack("B", cl)
+                                remaining_clusters -= cl
+                                for cluster in xrange(cl):
+                                    s += struct.pack("B", random.randint(0, 10*bin_size - 1))
+                                    s += struct.pack("B", random.randint(0, 10*bin_size - 1))
+                            f = open(os.path.join(self.infopath, 'Data', 'Intensities',
+                                #            'L{:03d}'.format(lane.idx + 1), 
+                                "s_{:d}_{:d}{:d}{:02d}.clocs".format(lane.idx + 1,
+                                                            surface.idx + 1,
+                                                            swath.idx + 1,
+                                                            tile.idx + 1)), 'wb')
+                            f.write(s)
+                            f.close()
+
+    def _make_miseq_locs(self):
+        for lane in self.lanes:
+            for section in lane.sections:
+                for swath in section.swaths:
+                    for surface in swath.surfaces:
+                        for tile in surface.tiles:
+                            s =struct.pack('<I', 1)
+                            s += struct.pack('<f', 1.0)
+                            cluster_locs = ""
+                            c = 0
+                            for cluster in xrange(len(tile.clusters)):
+                                c += 1
+                                cluster_locs += struct.pack("<f", random.uniform(
+                                    0, PARAMS["dims"]["width"]))
+                                cluster_locs += struct.pack("<f", random.uniform(
+                                    0, PARAMS["dims"]["width"]))
+                            s += struct.pack("<I", c)
+                            s += cluster_locs
+
+                            f = open(os.path.join(lane.locspath,
+                                 "s_{:d}_{:d}{:d}{:02d}.locs".format(
+                                                        lane.idx + 1,
+                                                        surface.idx + 1,
+                                                        swath.idx + 1,
+                                                        tile.idx + 1)), 'wb')
+                            f.write(s)
+                            f.close()
+
+
     def make_locs(self, machinetype):
         print("Creating locs file...")
         if machinetype == "nextseq":
             self._make_nextseq_locs()
         elif machinetype == "hiseqx" or machinetype == "hiseq4000":
             self._make_hiseqx_locs()
+        elif machinetype == "miseq":
+            #            self._make_miseq_clocs()
+            self._make_miseq_locs()
 
 class Read(object):
     def __init__(self, num_cycles, is_indexed):
@@ -430,6 +495,7 @@ class Lane(object):
 class Cycle(object):
     def __init__(self):
         pass
+
 
 class Section(object):
     def __init__(self, idx):
