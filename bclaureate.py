@@ -13,15 +13,18 @@ import getopt
 
 machinetypes = [
         "nextseq",
-        "hiseqx"]
+        "hiseqx",
+        "hiseq4000"]
 
 machinenames = {
         "nextseq": "NSTESTMACHINE",
-        "hiseqx": "HXTESTMACHINE"
+        "hiseqx": "HXTESTMACHINE",
+        "hiseq4000": "HFTESTMACHINE",
         }
 
 implemented = ["nextseq",
-               "hiseqx"]
+               "hiseqx",
+               "hiseq4000"]
 
 max_params = {
         "nextseq": {
@@ -32,6 +35,13 @@ max_params = {
             "sections": 3,
             },
         "hiseqx": {
+            "lanes": 8,
+            "surfaces": 2,
+            "swaths": 2,
+            "tiles": 24,
+            "sections": 1
+            },
+        "hiseq4000": {
             "lanes": 8,
             "surfaces": 2,
             "swaths": 2,
@@ -235,7 +245,7 @@ class Run(object):
         print("Making bcl files...")
         if machinetype == "nextseq":
             self._make_nextseq_bcls()
-        elif machinetype == "hiseqx":
+        elif machinetype == "hiseqx" or machinetype == "hiseq4000":
             self._make_hiseqx_bcls()
 
 
@@ -265,7 +275,7 @@ class Run(object):
         if machinetype == "nextseq":
             print("Making bci files...")
             self._make_nextseq_bcis()
-        elif machinetype == "hiseqx":
+        elif machinetype == "hiseqx" or machinetype == "hiseq4000":
             # hiseqx doesn't have bci files
             return
 
@@ -320,7 +330,7 @@ class Run(object):
         print("Making filters file...")
         if machinetype == "nextseq":
             self._make_nextseq_filters()
-        elif machinetype == "hiseqx":
+        elif machinetype == "hiseqx" or machinetype == "hiseq4000":
             self._make_hiseqx_filters()
 
 
@@ -384,7 +394,7 @@ class Run(object):
         print("Creating locs file...")
         if machinetype == "nextseq":
             self._make_nextseq_locs()
-        elif machinetype == "hiseqx":
+        elif machinetype == "hiseqx" or machinetype == "hiseq4000":
             self._make_hiseqx_locs()
 
 class Read(object):
@@ -511,6 +521,8 @@ def main(argv):
     for opt, arg in opts:
         if opt in '-m':
             if arg in implemented:
+                # hiseq4000 and hiseqx are indistinguishable in output file
+                # format
                 oor_params = []
                 for par in max_params[arg].keys():
                     if max_params[arg][par] < PARAMS[par]:
