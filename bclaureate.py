@@ -20,9 +20,26 @@ machinenames = {
         "hiseqx": "HXTESTMACHINE"
         }
 
-implemented = ["nextseq"]
+implemented = ["nextseq",
+               "hiseqx"]
 
-
+max_params = {
+        "nextseq": {
+            "lanes": 4,
+            "surfaces": 2,
+            "swaths": 3,
+            "tiles": 12,
+            "sections": 3,
+            },
+        "hiseqx": {
+            "lanes": 8,
+            "surfaces": 2,
+            "swaths": 2,
+            "tiles": 24,
+            "sections": 1
+            },
+        }
+"""
 class RunParameters(object):
     def __init__(self):
         self.lanes = 4
@@ -38,15 +55,30 @@ class RunParameters(object):
                       {"num_cycles": 1, "is_indexed": False}]
 
 PARAMS = RunParameters()
+"""
+PARAMS = {
+        "lanes": 4,
+        "surfaces": 2,
+        "swaths": 3,
+        "tiles": 12,
+        "sections": 3,
+        "max_tiles": 216,
+        "clusters": 2000,
+        "flowcellname": "TESTFLOWCELL",
+        "date": datetime.now().strftime("%y%m%d"),
+        "reads": [{"num_cycles": 1, "is_indexed": False},
+                  {"num_cycles": 1, "is_indexed": False}],
+        "dims": {"width": 3188, "height": 7241}
+        }
 
 class Run(object):
     def __init__(self, machinetype):
         assert machinetype in machinetypes
         self.machinetype = machinetype
-        self.lanes = [Lane(lane) for lane in xrange(PARAMS.lanes)]
+        self.lanes = [Lane(lane) for lane in xrange(PARAMS["lanes"])]
         self.reads = [Read(read["num_cycles"], read["is_indexed"])
-                      for read in PARAMS.reads]
-        self.id = "{}_{}_{:04d}".format(PARAMS.date, machinenames[machinetype],
+                      for read in PARAMS["reads"]]
+        self.id = "{}_{}_{:04d}".format(PARAMS["date"], machinenames[machinetype],
                                     random.randint(0, 9999))
         self.infopath = ""
 
@@ -63,13 +95,13 @@ class Run(object):
                 })
 
         flowcell = ElementTree.SubElement(root, "Flowcell")
-        flowcell.text = PARAMS.flowcellname
+        flowcell.text = PARAMS["flowcellname"]
 
         instrument = ElementTree.SubElement(root, "Instrument")
         instrument.text = machinenames[machinetype]
 
         date = ElementTree.SubElement(run, "Date")
-        date.text = PARAMS.date
+        date.text = PARAMS["date"]
 
         reads = ElementTree.SubElement(run, "Reads")
         for i in xrange(len(self.reads)):
@@ -81,13 +113,13 @@ class Run(object):
                     })
 
         flowcellparams = {
-            "LaneCount": "{:d}".format(PARAMS.lanes),
-            "SurfaceCount": "{:d}".format(PARAMS.surfaces),
-            "SwathCount": "{:d}".format(PARAMS.swaths),
-            "TileCount": "{:d}".format(PARAMS.tiles)}
+            "LaneCount": "{:d}".format(PARAMS["lanes"]),
+            "SurfaceCount": "{:d}".format(PARAMS["surfaces"]),
+            "SwathCount": "{:d}".format(PARAMS["swaths"]),
+            "TileCount": "{:d}".format(PARAMS["tiles"])}
 
         if machinetype == "nextseq":
-            flowcellparams["SectionPerLane"] = "{:d}".format(PARAMS.sections)
+            flowcellparams["SectionPerLane"] = "{:d}".format(PARAMS["sections"])
             flowcellparams["LanePerSection"] =  "2"
  
         flowcell = ElementTree.SubElement(run, "FlowcellLayout", flowcellparams)
@@ -99,11 +131,11 @@ class Run(object):
 
         tiles = ElementTree.SubElement(tileset, "Tiles")
 
-        for lane_idx in xrange(PARAMS.lanes):
-            for section_idx in xrange(PARAMS.sections):
-                for swath_idx in xrange(PARAMS.swaths):
-                    for surface_idx in xrange(PARAMS.surfaces):
-                        for tile_idx in xrange(PARAMS.tiles):
+        for lane_idx in xrange(PARAMS["lanes"]):
+            for section_idx in xrange(PARAMS["sections"]):
+                for swath_idx in xrange(PARAMS["swaths"]):
+                    for surface_idx in xrange(PARAMS["surfaces"]):
+                        for tile_idx in xrange(PARAMS["tiles"]):
                             tile = ElementTree.SubElement(tiles, "Tile")
                             if machinetype == "nextseq":
                             # Section index is given by number of camera
@@ -169,12 +201,13 @@ class Run(object):
                     f.close()
                     subprocess.call(["bgzip",
                                      os.path.join(lane.bcpath, fn)])
-                    subprocess.call(["mv", os.path.join(lane.bcpath,fn+'gz'),
-                                     os.path.join(lane.bcpath,fn+'bgzf')])
+                    subprocess.call(["mv", os.path.join(lane.bcpath,fn+'.gz'),
+                                     os.path.join(lane.bcpath,fn+'.bgzf')])
+
+
     def _make_hiseqx_bcls(self):
         for lane in self.lanes:
             cycle_idx = 0
-            tile_idx = 0
             for read in self.reads:
                 for cycle in xrange(read.num_cycles):
                     cycle_idx += 1
@@ -182,35 +215,41 @@ class Run(object):
                         for swath in section.swaths:
                             for surface in swath.surfaces:
                                 for tile in surface.tiles:
-                                    tile_idx += 1
-                                    fn = "s_{:d}_{:d}.bc".format(lane.idx,
-                                                              tile_idx)
+                                    fn = "s_{:d}_{:d}{:d}{:02d}.bcl"\
+                                            .format(lane.idx+1,
+                                                    surface.idx+1,
+                                                    swath.idx+1,
+                                                    tile.idx+1)
                                     f = open(os.path.join(lane.bcpath,
                                              "C{:d}.1".format(cycle_idx),
                                              fn), 'wb')
                                     f.write(tile.hiseqx_bcl())
                                     f.close()
-
+                                    subprocess.call(["gzip",
+                                        os.path.join(lane.bcpath,
+                                            "C{:d}.1".format(cycle_idx),
+                                            fn)])
 
 
     def make_bcls(self, machinetype):
+        print("Making bcl files...")
         if machinetype == "nextseq":
-            _make_nextseq_bcls()
+            self._make_nextseq_bcls()
         elif machinetype == "hiseqx":
-            _make_hiseqx_bcls()
+            self._make_hiseqx_bcls()
 
 
     def _make_nextseq_bcis(self):
-        cn = struct.pack("<I", PARAMS.clusters)
-        for lane_idx in xrange(PARAMS.lanes):
+        cn = struct.pack("<I", PARAMS["clusters"])
+        for lane_idx in xrange(PARAMS["lanes"]):
             lane = self.lanes[lane_idx]
             f = open(os.path.join(lane.bcpath,
                                   's_{:d}.bci'.format(lane_idx + 1)), 'wb')
             s = ''
-            for section_idx in xrange(PARAMS.sections):
-                for swath_idx in xrange(PARAMS.swaths):
-                    for surface_idx in xrange(PARAMS.surfaces):
-                        for tile_idx in xrange(PARAMS.tiles):
+            for section_idx in xrange(PARAMS["sections"]):
+                for swath_idx in xrange(PARAMS["swaths"]):
+                    for surface_idx in xrange(PARAMS["surfaces"]):
+                        for tile_idx in xrange(PARAMS["tiles"]):
                             section_offset = 1 if lane_idx < 2 else 4
                             s += struct.pack('<I',
                                   int("{:d}{:d}{:d}{:02d}".format(
@@ -224,14 +263,15 @@ class Run(object):
 
     def make_bcis(self, machinetype):
         if machinetype == "nextseq":
-            _make_nextseq_bcis()
+            print("Making bci files...")
+            self._make_nextseq_bcis()
         elif machinetype == "hiseqx":
             # hiseqx doesn't have bci files
             return
 
 
     def _make_nextseq_filters(self):
-        for lane_idx in xrange(PARAMS.lanes):
+        for lane_idx in xrange(PARAMS["lanes"]):
             lane = self.lanes[lane_idx]
             s = struct.pack("<I", 0)
             s += struct.pack("<I", 3)
@@ -252,7 +292,7 @@ class Run(object):
             f.close()
 
     def _make_hiseqx_filters(self):
-        for lane_idx in xrange(PARAMS.lanes):
+        for lane_idx in xrange(PARAMS["lanes"]):
             lane = self.lanes[lane_idx]
             for section in lane.sections:
                 for swath in section.swaths:
@@ -277,14 +317,15 @@ class Run(object):
                             f.close()
 
     def make_filters(self, machinetype):
+        print("Making filters file...")
         if machinetype == "nextseq":
-            _make_nextseq_filters()
+            self._make_nextseq_filters()
         elif machinetype == "hiseqx":
-            _make_hiseqx_filters()
+            self._make_hiseqx_filters()
 
 
     def _make_nextseq_locs(self):
-        for lane_idx in xrange(PARAMS.lanes):
+        for lane_idx in xrange(len(self.lanes)):
             lane = self.lanes[lane_idx]
             s = struct.pack('<I', 1)
             s += struct.pack('<f', 1.0)
@@ -296,8 +337,12 @@ class Run(object):
                         for tile in surface.tiles:
                             for cluster in tile.clusters:
                                 c += 1
-                                cluster_locs += struct.pack("<f", cluster.x_coord)
-                                cluster_locs += struct.pack("<f", cluster.y_coord)
+                                cluster_locs += struct.pack(
+                                        "<f", random.uniform(0,
+                                            PARAMS["dims"]["width"]))
+                                cluster_locs += struct.pack(
+                                        "<f", random.uniform(0,
+                                            PARAMS["dims"]["height"]))
             s += struct.pack("<I", c)
             s += cluster_locs
             
@@ -309,13 +354,38 @@ class Run(object):
 
     def _make_hiseqx_locs(self):
         # TODO: this
-        pass
+        # clusters must exist at one of pre-defined "wells", which are in the
+        # same locations across reads/lanes/tiles/etc.
+        total_clusters = PARAMS["clusters"]
+        x_locs = [struct.pack("<f", x) for x in 
+                        sorted([(random.uniform(0, PARAMS["dims"]["width"]))
+                              for xloc in range(total_clusters/3)])]
+        y_locs = [struct.pack("<f", float(y)) for y in
+                        sorted([(random.uniform(0, PARAMS["dims"]["height"]))
+                              for yloc in range(2 * total_clusters/3)])]
+        cluster_locs = ""
+        for xloc in x_locs:
+            for yloc in y_locs:
+                cluster_locs += xloc
+                cluster_locs += yloc
+
+        s = struct.pack('<I', 1)
+        s += struct.pack('<f', 1.0)
+        s += struct.pack('<I', total_clusters)
+        s += cluster_locs
+
+        f = open(os.path.join(self.infopath, 'Data', 'Intensities', 's.locs'),
+                 'wb')
+        f.write(s)
+        f.close()
+
 
     def make_locs(self, machinetype):
+        print("Creating locs file...")
         if machinetype == "nextseq":
-            _make_nextseq_locs()
+            self._make_nextseq_locs()
         elif machinetype == "hiseqx":
-            _make_hiseqx_locs()
+            self._make_hiseqx_locs()
 
 class Read(object):
     def __init__(self, num_cycles, is_indexed):
@@ -324,7 +394,7 @@ class Read(object):
 
 class Lane(object):
     def __init__(self, idx):
-        self.sections = [Section(section) for section in xrange(PARAMS.sections)]
+        self.sections = [Section(section) for section in xrange(PARAMS["sections"])]
         self.bcpath = ""
         self.idx = idx
 
@@ -347,24 +417,24 @@ class Cycle(object):
 
 class Section(object):
     def __init__(self, idx):
-        self.swaths = [Swath(swath) for swath in xrange(PARAMS.swaths)]
+        self.swaths = [Swath(swath) for swath in xrange(PARAMS["swaths"])]
         self.idx = idx
 
 class Swath(object):
     def __init__(self, idx):
-        self.surfaces = [Surface(surface) for surface in xrange(PARAMS.surfaces)]
+        self.surfaces = [Surface(surface) for surface in xrange(PARAMS["surfaces"])]
         self.idx = idx
 
 
 class Surface(object):
     def __init__(self, idx):
-        self.tiles = [Tile(tile) for tile in xrange(PARAMS.tiles)]
+        self.tiles = [Tile(tile) for tile in xrange(PARAMS["tiles"])]
         self.idx = idx
 
 
 class Tile(object):
     def __init__(self, idx):
-        self.clusters = [Cluster() for cluster in xrange(PARAMS.clusters)]
+        self.clusters = [Cluster() for cluster in xrange(PARAMS["clusters"])]
         self.idx = idx
 
     def as_bcl(self):
@@ -383,8 +453,6 @@ class Cluster(object):
     def __init__(self):
         self.byte = chr(random.randint(0, 255))
         self.filtered = random.randint(0, 1)
-        self.x_coord = random.uniform(-10.0, 9999999.99)
-        self.y_coord = random.uniform(-10.0, 9999999.99)
 
 
 def int_32_to_little_endian_list(n):
@@ -408,12 +476,13 @@ def build_directory_structure(run):
                                   'BaseCalls', 'L{:03d}'.format(l + 1)))
         lane.bcpath = os.path.join(os.getcwd(), 'Data', 'Intensities',
                                   'BaseCalls', 'L{:03d}'.format(l + 1))
-
         if run.machinetype != "nextseq":
+            cycle_idx = 0
             for read in run.reads:
                 for cycle in xrange(read.num_cycles):
+                    cycle_idx += 1
                     os.makedirs(os.path.join(lane.bcpath,
-                                             "C{:d}.1".format(cycle)))
+                                             "C{:d}.1".format(cycle_idx)))
 
 
 def pp(elem):
@@ -442,17 +511,35 @@ def main(argv):
     for opt, arg in opts:
         if opt in '-m':
             if arg in implemented:
-                print(arg)
+                oor_params = []
+                for par in max_params[arg].keys():
+                    if max_params[arg][par] < PARAMS[par]:
+                        print("value of parameter {} is greater ".format(par)+
+                              "than machine's normal capabilities.")
+                        if (raw_input("Continue with max value?  ").lower()\
+                                not in ['y', 'yes']):
+                            print("exiting...")
+                            sys.exit(3)
+                            return
+                        else:
+                            PARAMS[par] = max_params[arg][par]
+                run = Run(arg)
+                build_directory_structure(run)
+                run.make_runinfo(run.machinetype)
+                run.make_bcls(run.machinetype)
+                run.make_bcis(run.machinetype)
+                run.make_filters(run.machinetype)
+                run.make_locs(run.machinetype)
             else:
                 usage()
             return
-            run = Run()
+            run = Run(arg)
             build_directory_structure(run)
-            run.make_runinfo()
-            run.make_bcls()
-            run.make_bcis()
-            run.make_filters()
-            run.make_locs()
+            run.make_runinfo(run.machinetype)
+            run.make_bcls(run.machinetype)
+            run.make_bcis(run.machinetype)
+            run.make_filters(run.machinetype)
+            run.make_locs(run.machinetype)
     
 if __name__ == "__main__":
     main(sys.argv[1:])
