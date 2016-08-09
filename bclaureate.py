@@ -16,7 +16,8 @@ machinetypes = [
         "nextseq",
         "hiseqx",
         "hiseq4000",
-        "miseq"
+        "miseq",
+        "hiseq2500"
         ]
 
 machinenames = {
@@ -24,14 +25,8 @@ machinenames = {
         "hiseqx": "HXTESTMACHINE",
         "hiseq4000": "HFTESTMACHINE",
         "miseq": "MSTESTMACHINE",
+        "hiseq2500": "HSTESTMACHINE",
         }
-
-implemented = [
-               "nextseq",
-               "hiseqx",
-               "hiseq4000",
-               "miseq",
-              ]
 
 max_params = {
         "nextseq": {
@@ -62,6 +57,13 @@ max_params = {
             "tiles": 19,
             "sections": 1
             },
+        "hiseq2500": {
+            "lanes": 8,
+            "surfaces": 2,
+            "swaths": 3,
+            "tiles": 16,
+            "sections": 1
+            }
         }
 
 
@@ -71,7 +73,6 @@ PARAMS = {
         "swaths": 3,
         "tiles": 12,
         "sections": 3,
-        "max_tiles": 216,
         "clusters": 2000,
         "flowcellname": "TESTFLOWCELL",
         "date": datetime.now().strftime("%y%m%d"),
@@ -79,6 +80,7 @@ PARAMS = {
                   {"num_cycles": 1, "is_indexed": False}],
         "dims": {"width": 2048, "height": 7241}
         }
+
 
 class Run(object):
     def __init__(self, machinetype):
@@ -180,9 +182,7 @@ class Run(object):
                                             surface_idx + 1,
                                             swath_idx + 1,
                                             tile_idx + 1)
-            if machinetype == "hiseqx":
-                aligntophix = ElementTree.SubElement(run, "AlignToPhiX")
-
+            
             image_dims = ElementTree.SubElement(run, "ImageDimensions", {
                 "Width": "2592",
                 "Height": "1944"
@@ -195,6 +195,15 @@ class Run(object):
 
             green = ElementTree.SubElement(image_chans, "Name")
             green.text = "Green"
+
+
+        if machinetype == "hiseqx" or machinetype == "hiseq2500":
+            aligntophix = ElementTree.SubElement(run, "AlignToPhiX")
+            if machinetype == "hiseq2500":
+                for lane in self.lanes:
+                    alignlane = ElementTree.SubElement(aligntophix, "Lane")
+                    alignlane.text = "{:d}".format(lane.idx + 1)
+                
 
         f = open(os.path.join(self.infopath, 'RunInfo.xml'), 'w')
         f.write(pp(root))
@@ -250,6 +259,8 @@ class Run(object):
             self._make_hiseqx_bcls()
         elif machinetype == "miseq":
             self._make_hiseqx_bcls()
+        elif machinetype == "hiseq2500":
+            self._make_hiseqx_bcls()
 
 
     def _make_nextseq_bcis(self):
@@ -274,13 +285,13 @@ class Run(object):
             f.write(s)
             f.close()
 
+
     def make_bcis(self, machinetype):
         if machinetype == "nextseq":
             print("Making bci files...")
             self._make_nextseq_bcis()
-        elif machinetype == "hiseqx" or machinetype == "hiseq4000":
-            # hiseqx doesn't have bci files
-            return
+        # other machines don't output bci files
+        return
 
 
     def _make_nextseq_filters(self):
@@ -337,6 +348,8 @@ class Run(object):
             self._make_hiseqx_filters()
         elif machinetype == "miseq":
             self._make_hiseqx_filters()
+        elif machinetype == "hiseq2500":
+            self._make_hiseqx_filters()
 
 
     def _make_nextseq_locs(self):
@@ -370,7 +383,7 @@ class Run(object):
     def _make_hiseqx_locs(self):
         # TODO: this
         # clusters must exist at one of pre-defined "wells", which are in the
-        # same locations across reads/lanes/tiles/etc.
+        # same locations on each tile, i.e. one locs file for whole run
         total_clusters = PARAMS["clusters"]
         x_locs = [struct.pack("<f", x) for x in 
                         sorted([(random.uniform(0, PARAMS["dims"]["width"]))
@@ -395,7 +408,7 @@ class Run(object):
         f.close()
 
 
-    def _make_miseq_clocs(self):
+    def _make_hiseq2500_clocs(self):
         """https://github.com/broadinstitute/picard/blob/master/src/main/java/picard/illumina/parser/readers/ClocsFileReader.java
         """
         for lane in self.lanes:
@@ -403,16 +416,17 @@ class Run(object):
                 for swath in section.swaths:
                     for surface in swath.surfaces:
                         for tile in surface.tiles:
-                            s = struct.pack('B', 0) # First byte in file is unused
-                            bin_size = 25
+                            # First byte in file gives clocs version (1)
+                            s = struct.pack('B', 1)
+                            bin_size = 25.0
                             image_width = PARAMS["dims"]["width"]
-                            max_x_bins = int(math.ceil(image_width / bin_size))
+                            max_x_bins = math.ceil(image_width / bin_size)
                             max_y_bins = 5
                             remaining_clusters = PARAMS["clusters"]
 
                             # bytes 1-4: unsigned int num_bins
                             s += struct.pack("<I", max_x_bins * max_y_bins)
-                            for y in xrange(max_x_bins * max_y_bins):
+                            for y in xrange(int(max_x_bins) * max_y_bins):
                                 cl = min(int(math.ceil(PARAMS["clusters"] / (max_x_bins * max_y_bins))),
                                         remaining_clusters)
                                 s += struct.pack("B", cl)
@@ -420,8 +434,7 @@ class Run(object):
                                 for cluster in xrange(cl):
                                     s += struct.pack("B", random.randint(0, 10*bin_size - 1))
                                     s += struct.pack("B", random.randint(0, 10*bin_size - 1))
-                            f = open(os.path.join(self.infopath, 'Data', 'Intensities',
-                                #            'L{:03d}'.format(lane.idx + 1), 
+                            f = open(os.path.join(lane.locspath, 
                                 "s_{:d}_{:d}{:d}{:02d}.clocs".format(lane.idx + 1,
                                                             surface.idx + 1,
                                                             swath.idx + 1,
@@ -465,8 +478,9 @@ class Run(object):
         elif machinetype == "hiseqx" or machinetype == "hiseq4000":
             self._make_hiseqx_locs()
         elif machinetype == "miseq":
-            #            self._make_miseq_clocs()
             self._make_miseq_locs()
+        elif machinetype == "hiseq2500":
+            self._make_hiseq2500_clocs()
 
 class Read(object):
     def __init__(self, num_cycles, is_indexed):
@@ -581,7 +595,7 @@ def usage():
     print("Usage:")
     print(" -m <machine type>")
     print(" Where machine type is one of:")
-    print("  " + ", ".join(implemented))
+    print("  " + ", ".join(machinetypes))
 
 def main(argv):
     """http://www.diveintopython.net/scripts_and_streams/command_line_arguments.html"""
@@ -592,7 +606,7 @@ def main(argv):
         sys.exit(2)
     for opt, arg in opts:
         if opt in '-m':
-            if arg in implemented:
+            if arg in machinetypes:
                 # hiseq4000 and hiseqx are indistinguishable in output file
                 # format
                 oor_params = []
