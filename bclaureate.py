@@ -12,6 +12,23 @@ import sys
 import getopt
 import math
 
+#### ONLY EDIT PARAMETERS BETWEEN THESE LINES ####
+PARAMS = {
+        "lanes": 4,
+        "surfaces": 2,
+        "swaths": 3,
+        "tiles": 12,
+        "sections": 3,
+        "clusters": 2000,
+        "flowcellname": "TESTFLOWCELL",
+        "date": datetime.now().strftime("%y%m%d"),
+        "reads": [{"num_cycles": 1, "is_indexed": False},
+                  {"num_cycles": 1, "is_indexed": False}],
+        "dims": {"width": 2048, "height": 7241}
+        }
+#### ONLY EDIT PARAMETERS BETWEEN THESE LINES ####
+
+
 machinetypes = [
         "nextseq",
         "hiseqx",
@@ -67,21 +84,6 @@ max_params = {
         }
 
 
-PARAMS = {
-        "lanes": 4,
-        "surfaces": 2,
-        "swaths": 3,
-        "tiles": 12,
-        "sections": 3,
-        "clusters": 2000,
-        "flowcellname": "TESTFLOWCELL",
-        "date": datetime.now().strftime("%y%m%d"),
-        "reads": [{"num_cycles": 1, "is_indexed": False},
-                  {"num_cycles": 1, "is_indexed": False}],
-        "dims": {"width": 2048, "height": 7241}
-        }
-
-
 class Run(object):
     def __init__(self, machinetype):
         assert machinetype in machinetypes
@@ -89,8 +91,9 @@ class Run(object):
         self.lanes = [Lane(lane) for lane in xrange(PARAMS["lanes"])]
         self.reads = [Read(read["num_cycles"], read["is_indexed"])
                       for read in PARAMS["reads"]]
-        self.id = "{}_{}_{:04d}".format(PARAMS["date"], machinenames[machinetype]
-                                    , random.randint(0, 9999))
+        self.id = "{}_{}_{:04d}".format(PARAMS["date"],
+                                        machinenames[machinetype],
+                                        random.randint(0, 9999))
         self.infopath = ""
 
     def make_runinfo(self, machinetype):
@@ -117,7 +120,7 @@ class Run(object):
         reads = ElementTree.SubElement(run, "Reads")
         for i in xrange(len(self.reads)):
             read = ElementTree.SubElement(reads, "Read", {
-                    "Number": str(i+1),
+                    "Number": str(i + 1),
                     "NumCycles": "{:d}".format(self.reads[i].num_cycles),
                     "IsIndexedRead": "Y" if self.reads[i].is_indexed
                                      else "N"
@@ -130,10 +133,12 @@ class Run(object):
             "TileCount": "{:d}".format(PARAMS["tiles"])}
 
         if machinetype == "nextseq":
-            flowcellparams["SectionPerLane"] = "{:d}".format(PARAMS["sections"])
-            flowcellparams["LanePerSection"] =  "2"
- 
-        flowcell = ElementTree.SubElement(run, "FlowcellLayout", flowcellparams)
+            flowcellparams["SectionPerLane"] = "{:d}".format(
+                                                        PARAMS["sections"])
+            flowcellparams["LanePerSection"] = "2"
+
+        flowcell = ElementTree.SubElement(run, "FlowcellLayout",
+                                          flowcellparams)
 
         if machinetype == "nextseq" or machinetype == "hiseqx" or\
             machinetype == "hiseq4000":
@@ -152,7 +157,7 @@ class Run(object):
                                 tile = ElementTree.SubElement(tiles, "Tile")
                                 if machinetype == "nextseq":
                                 # Section index is given by number of camera
-                                # imaging that section. Each lane has 3 sections,
+                                # imaging that section.
                                 #
                                 #       L1     L2   |   L3     L4
                                 #      +---+  +---+ |  +---+  +---+
@@ -170,7 +175,8 @@ class Run(object):
                                 #      +---+  +---+ |  +---+  +---+
                                 #
                                     section_offset = 1 if lane_idx < 2 else 4
-                                    tile.text = "{:d}_{:d}{:d}{:d}{:02d}".format(
+                                    tile.text = "{:d}_{:d}{:d}{:d}{:02d}".\
+                                            format(
                                         lane_idx + 1,
                                         surface_idx + 1,
                                         swath_idx + 1,
@@ -182,7 +188,7 @@ class Run(object):
                                             surface_idx + 1,
                                             swath_idx + 1,
                                             tile_idx + 1)
-            
+
             image_dims = ElementTree.SubElement(run, "ImageDimensions", {
                 "Width": "2592",
                 "Height": "1944"
@@ -196,14 +202,12 @@ class Run(object):
             green = ElementTree.SubElement(image_chans, "Name")
             green.text = "Green"
 
-
         if machinetype == "hiseqx" or machinetype == "hiseq2500":
             aligntophix = ElementTree.SubElement(run, "AlignToPhiX")
             if machinetype == "hiseq2500":
                 for lane in self.lanes:
                     alignlane = ElementTree.SubElement(aligntophix, "Lane")
                     alignlane.text = "{:d}".format(lane.idx + 1)
-                
 
         f = open(os.path.join(self.infopath, 'RunInfo.xml'), 'w')
         f.write(pp(root))
@@ -221,9 +225,9 @@ class Run(object):
                     f.close()
                     subprocess.call(["bgzip",
                                      os.path.join(lane.bcpath, fn)])
-                    subprocess.call(["mv", os.path.join(lane.bcpath,fn+'.gz'),
-                                     os.path.join(lane.bcpath,fn+'.bgzf')])
-
+                    subprocess.call(["mv",
+                                     os.path.join(lane.bcpath, fn + '.gz'),
+                                     os.path.join(lane.bcpath, fn + '.bgzf')])
 
     def _make_hiseqx_bcls(self):
         for lane in self.lanes:
@@ -236,10 +240,10 @@ class Run(object):
                             for surface in swath.surfaces:
                                 for tile in surface.tiles:
                                     fn = "s_{:d}_{:d}{:d}{:02d}.bcl"\
-                                            .format(lane.idx+1,
-                                                    surface.idx+1,
-                                                    swath.idx+1,
-                                                    tile.idx+1)
+                                            .format(lane.idx + 1,
+                                                    surface.idx + 1,
+                                                    swath.idx + 1,
+                                                    tile.idx + 1)
                                     f = open(os.path.join(lane.bcpath,
                                              "C{:d}.1".format(cycle_idx),
                                              fn), 'wb')
@@ -249,7 +253,6 @@ class Run(object):
                                         os.path.join(lane.bcpath,
                                             "C{:d}.1".format(cycle_idx),
                                             fn)])
-
 
     def make_bcls(self, machinetype):
         print("Making bcl files...")
@@ -261,7 +264,6 @@ class Run(object):
             self._make_hiseqx_bcls()
         elif machinetype == "hiseq2500":
             self._make_hiseqx_bcls()
-
 
     def _make_nextseq_bcis(self):
         cn = struct.pack("<I", PARAMS["clusters"])
@@ -285,14 +287,12 @@ class Run(object):
             f.write(s)
             f.close()
 
-
     def make_bcis(self, machinetype):
         if machinetype == "nextseq":
             print("Making bci files...")
             self._make_nextseq_bcis()
         # other machines don't output bci files
         return
-
 
     def _make_nextseq_filters(self):
         for lane_idx in xrange(PARAMS["lanes"]):
@@ -307,7 +307,8 @@ class Run(object):
                         for tile in surface.tiles:
                             for cluster in tile.clusters:
                                 c += 1
-                                cluster_passes += struct.pack("B", cluster.filtered)
+                                cluster_passes += struct.pack(
+                                                    "B", cluster.filtered)
             s += struct.pack("<I", c)
             s += cluster_passes
             f = open(os.path.join(lane.bcpath,
@@ -328,7 +329,8 @@ class Run(object):
                             c = 0
                             for cluster in tile.clusters:
                                 c += 1
-                                cluster_passes += struct.pack("B", cluster.filtered)
+                                cluster_passes += struct.pack(
+                                                    "B", cluster.filtered)
                             s += struct.pack("<I", c)
                             s += cluster_passes
                             f = open(os.path.join(lane.bcpath,
@@ -351,7 +353,6 @@ class Run(object):
         elif machinetype == "hiseq2500":
             self._make_hiseqx_filters()
 
-
     def _make_nextseq_locs(self):
         for lane_idx in xrange(len(self.lanes)):
             lane = self.lanes[lane_idx]
@@ -373,24 +374,22 @@ class Run(object):
                                             PARAMS["dims"]["height"]))
             s += struct.pack("<I", c)
             s += cluster_locs
-            
-            f = open(os.path.join(lane.locspath, "s_{:d}.locs".format(lane_idx + 1)),
-                    "wb")
+
+            f = open(os.path.join(lane.locspath,
+                                  "s_{:d}.locs".format(lane_idx + 1)), "wb")
             f.write(s)
             f.close()
 
-
     def _make_hiseqx_locs(self):
-        # TODO: this
         # clusters must exist at one of pre-defined "wells", which are in the
         # same locations on each tile, i.e. one locs file for whole run
         total_clusters = PARAMS["clusters"]
-        x_locs = [struct.pack("<f", x) for x in 
+        x_locs = [struct.pack("<f", x) for x in
                         sorted([(random.uniform(0, PARAMS["dims"]["width"]))
-                              for xloc in range(total_clusters/3)])]
+                              for xloc in range(total_clusters / 3)])]
         y_locs = [struct.pack("<f", float(y)) for y in
                         sorted([(random.uniform(0, PARAMS["dims"]["height"]))
-                              for yloc in range(2 * total_clusters/3)])]
+                              for yloc in range(2 * total_clusters / 3)])]
         cluster_locs = ""
         for xloc in x_locs:
             for yloc in y_locs:
@@ -407,10 +406,9 @@ class Run(object):
         f.write(s)
         f.close()
 
-
     def _make_hiseq2500_clocs(self):
-        """https://github.com/broadinstitute/picard/blob/master/src/main/java/picard/illumina/parser/readers/ClocsFileReader.java
-        """
+        # https://github.com/broadinstitute/picard/blob/master/src/main/java
+        #     /picard/illumina/parser/readers/ClocsFileReader.java
         for lane in self.lanes:
             for section in lane.sections:
                 for swath in section.swaths:
@@ -422,23 +420,29 @@ class Run(object):
                             image_width = PARAMS["dims"]["width"]
                             max_x_bins = math.ceil(image_width / bin_size)
                             max_y_bins = 5
+                            num_bins = max_x_bins * max_y_bins
                             remaining_clusters = PARAMS["clusters"]
 
                             # bytes 1-4: unsigned int num_bins
-                            s += struct.pack("<I", max_x_bins * max_y_bins)
-                            for y in xrange(int(max_x_bins) * max_y_bins):
-                                cl = min(int(math.ceil(PARAMS["clusters"] / (max_x_bins * max_y_bins))),
-                                        remaining_clusters)
+                            s += struct.pack("<I", int(num_bins))
+                            for y in xrange(int(num_bins)):
+                                cl = min(int(
+                                    math.ceil(PARAMS["clusters"] / num_bins)),
+                                          remaining_clusters)
                                 s += struct.pack("B", cl)
                                 remaining_clusters -= cl
                                 for cluster in xrange(cl):
-                                    s += struct.pack("B", random.randint(0, 10*bin_size - 1))
-                                    s += struct.pack("B", random.randint(0, 10*bin_size - 1))
-                            f = open(os.path.join(lane.locspath, 
-                                "s_{:d}_{:d}{:d}{:02d}.clocs".format(lane.idx + 1,
+                                    s += struct.pack("B", random.randint(
+                                                         0, 10 * bin_size - 1))
+                                    s += struct.pack("B", random.randint(
+                                                         0, 10 * bin_size - 1))
+                            f = open(os.path.join(lane.locspath,
+                                "s_{:d}_{:d}{:d}{:02d}.clocs".format(
+                                                            lane.idx + 1,
                                                             surface.idx + 1,
                                                             swath.idx + 1,
-                                                            tile.idx + 1)), 'wb')
+                                                            tile.idx + 1)),
+                                                        'wb')
                             f.write(s)
                             f.close()
 
@@ -448,16 +452,16 @@ class Run(object):
                 for swath in section.swaths:
                     for surface in swath.surfaces:
                         for tile in surface.tiles:
-                            s =struct.pack('<I', 1)
+                            s = struct.pack('<I', 1)
                             s += struct.pack('<f', 1.0)
                             cluster_locs = ""
                             c = 0
                             for cluster in xrange(len(tile.clusters)):
                                 c += 1
-                                cluster_locs += struct.pack("<f", random.uniform(
-                                    0, PARAMS["dims"]["width"]))
-                                cluster_locs += struct.pack("<f", random.uniform(
-                                    0, PARAMS["dims"]["width"]))
+                                cluster_locs += struct.pack("<f",
+                                    random.uniform(0, PARAMS["dims"]["width"]))
+                                cluster_locs += struct.pack("<f",
+                                    random.uniform(0, PARAMS["dims"]["width"]))
                             s += struct.pack("<I", c)
                             s += cluster_locs
 
@@ -470,7 +474,6 @@ class Run(object):
                             f.write(s)
                             f.close()
 
-
     def make_locs(self, machinetype):
         print("Creating locs file...")
         if machinetype == "nextseq":
@@ -482,14 +485,17 @@ class Run(object):
         elif machinetype == "hiseq2500":
             self._make_hiseq2500_clocs()
 
+
 class Read(object):
     def __init__(self, num_cycles, is_indexed):
         self.num_cycles = num_cycles
         self.is_indexed = is_indexed
 
+
 class Lane(object):
     def __init__(self, idx):
-        self.sections = [Section(section) for section in xrange(PARAMS["sections"])]
+        self.sections = [Section(section) for section in xrange(
+                                                          PARAMS["sections"])]
         self.bcpath = ""
         self.idx = idx
 
@@ -516,9 +522,11 @@ class Section(object):
         self.swaths = [Swath(swath) for swath in xrange(PARAMS["swaths"])]
         self.idx = idx
 
+
 class Swath(object):
     def __init__(self, idx):
-        self.surfaces = [Surface(surface) for surface in xrange(PARAMS["surfaces"])]
+        self.surfaces = [Surface(surface) for surface in xrange(
+                                                          PARAMS["surfaces"])]
         self.idx = idx
 
 
@@ -545,6 +553,7 @@ class Tile(object):
         l = len(s)
         return struct.pack("<I", l) + s
 
+
 class Cluster(object):
     def __init__(self):
         self.byte = chr(random.randint(0, 255))
@@ -556,6 +565,7 @@ def int_32_to_little_endian_list(n):
     for i in xrange(0, 4):
         l.append((n >> (i * 8)) & 255)
     return l
+
 
 def build_directory_structure(run):
     os.mkdir(os.path.join(os.getcwd(), run.id + "_FC"))
@@ -597,8 +607,10 @@ def usage():
     print(" Where machine type is one of:")
     print("  " + ", ".join(machinetypes))
 
+
 def main(argv):
-    """http://www.diveintopython.net/scripts_and_streams/command_line_arguments.html"""
+    # http://www.diveintopython.net/scripts_and_streams/
+    #  command_line_arguments.html"""
     try:
         opts, args = getopt.getopt(argv, "m:", [])
     except getopt.GetoptError:
@@ -607,12 +619,10 @@ def main(argv):
     for opt, arg in opts:
         if opt in '-m':
             if arg in machinetypes:
-                # hiseq4000 and hiseqx are indistinguishable in output file
-                # format
                 oor_params = []
                 for par in max_params[arg].keys():
                     if max_params[arg][par] < PARAMS[par]:
-                        print("value of parameter {} is greater ".format(par)+
+                        print("value of parameter {} is greater ".format(par) +
                               "than machine's normal capabilities.")
                         if (raw_input("Continue with max value?  ").lower()\
                                 not in ['y', 'yes']):
@@ -638,6 +648,7 @@ def main(argv):
             run.make_bcis(run.machinetype)
             run.make_filters(run.machinetype)
             run.make_locs(run.machinetype)
-    
+
+
 if __name__ == "__main__":
     main(sys.argv[1:])
