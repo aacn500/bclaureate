@@ -29,6 +29,12 @@ PARAMS = {
 #### ONLY EDIT PARAMETERS BETWEEN THESE LINES ####
 
 
+# Generates .bcl, .bci, .filter, .locs, RunInfo.xml files to imitate an
+# Illumina sequencing machine's output files and directory structure.
+# Uses a mix of the bcl2fastq user guide, user guides for each machine,
+# and documentation about the .(c)locs file formats from the Picard project
+# on GitHub.
+
 machinetypes = [
         "nextseq",
         "hiseqx",
@@ -183,6 +189,7 @@ class Run(object):
                                         section_idx + section_offset,
                                         tile_idx + 1)
                                 else:
+                                    # other machines have no concept of section
                                     tile.text = "{:d}_{:d}{:d}{:02d}".format(
                                             lane_idx + 1,
                                             surface_idx + 1,
@@ -190,8 +197,8 @@ class Run(object):
                                             tile_idx + 1)
 
             image_dims = ElementTree.SubElement(run, "ImageDimensions", {
-                "Width": "2592",
-                "Height": "1944"
+                "Width": str(PARAMS["dims"]["width"]),
+                "Height": str(PARAMS["dims"]["height"])
                 })
 
             image_chans = ElementTree.SubElement(run, "ImageChannels")
@@ -266,6 +273,8 @@ class Run(object):
             self._make_hiseqx_bcls()
 
     def _make_nextseq_bcis(self):
+        # only nextseq generate bci files. One per lane, placed at
+        # Data/Intensities/BaseCalls/L00X
         cn = struct.pack("<I", PARAMS["clusters"])
         for lane_idx in xrange(PARAMS["lanes"]):
             lane = self.lanes[lane_idx]
@@ -295,6 +304,7 @@ class Run(object):
         return
 
     def _make_nextseq_filters(self):
+        # one file per lane, placed at Data/Intensities/BaseCalls/L00X
         for lane_idx in xrange(PARAMS["lanes"]):
             lane = self.lanes[lane_idx]
             s = struct.pack("<I", 0)
@@ -317,6 +327,9 @@ class Run(object):
             f.close()
 
     def _make_hiseqx_filters(self):
+        # all machines except nextseq use same filter file format
+        # placed at Data/Intensities/BaseCalls/L00X/
+        # one file per tile per lane
         for lane_idx in xrange(PARAMS["lanes"]):
             lane = self.lanes[lane_idx]
             for section in lane.sections:
@@ -354,6 +367,7 @@ class Run(object):
             self._make_hiseqx_filters()
 
     def _make_nextseq_locs(self):
+        # one locs file per lane, placed in Data/Intensities/L00X/
         for lane_idx in xrange(len(self.lanes)):
             lane = self.lanes[lane_idx]
             s = struct.pack('<I', 1)
@@ -383,6 +397,7 @@ class Run(object):
     def _make_hiseqx_locs(self):
         # clusters must exist at one of pre-defined "wells", which are in the
         # same locations on each tile, i.e. one locs file for whole run
+        # placed in root/Data/Intensities/
         total_clusters = PARAMS["clusters"]
         x_locs = [struct.pack("<f", x) for x in
                         sorted([(random.uniform(0, PARAMS["dims"]["width"]))
@@ -407,6 +422,7 @@ class Run(object):
         f.close()
 
     def _make_hiseq2500_clocs(self):
+        # one clocs file per tile per lane, placed in Data/Intensities/L00X/
         # https://github.com/broadinstitute/picard/blob/master/src/main/java
         #     /picard/illumina/parser/readers/ClocsFileReader.java
         for lane in self.lanes:
@@ -417,7 +433,11 @@ class Run(object):
                             # First byte in file gives clocs version (1)
                             s = struct.pack('B', 1)
                             bin_size = 25.0
-                            image_width = PARAMS["dims"]["width"]
+                            # Should use width given in PARAMS, but
+                            # hiseq2500 flowcells have width 2048,
+                            # having a different width /might/ break something
+                            # (or might not)
+                            image_width = 2048 #PARAMS["dims"]["width"]
                             max_x_bins = math.ceil(image_width / bin_size)
                             max_y_bins = 5
                             num_bins = max_x_bins * max_y_bins
@@ -447,12 +467,15 @@ class Run(object):
                             f.close()
 
     def _make_miseq_locs(self):
+        # one locs file per tile per lane, placed in Data/Intensities/L00X/
         for lane in self.lanes:
             for section in lane.sections:
                 for swath in section.swaths:
                     for surface in swath.surfaces:
                         for tile in surface.tiles:
+                            # bytes 0-3: unsigned int locs_version
                             s = struct.pack('<I', 1)
+                            # bytes 4-7: float (1.0)
                             s += struct.pack('<f', 1.0)
                             cluster_locs = ""
                             c = 0
@@ -462,7 +485,9 @@ class Run(object):
                                     random.uniform(0, PARAMS["dims"]["width"]))
                                 cluster_locs += struct.pack("<f",
                                     random.uniform(0, PARAMS["dims"]["width"]))
+                            # bytes 8-11: unsigned int num_clusters
                             s += struct.pack("<I", c)
+                            # bytes 12-end: float x_coord; float y_coord
                             s += cluster_locs
 
                             f = open(os.path.join(lane.locspath,
@@ -512,11 +537,6 @@ class Lane(object):
         return struct.pack("<I", l) + s
 
 
-class Cycle(object):
-    def __init__(self):
-        pass
-
-
 class Section(object):
     def __init__(self, idx):
         self.swaths = [Swath(swath) for swath in xrange(PARAMS["swaths"])]
@@ -560,14 +580,9 @@ class Cluster(object):
         self.filtered = random.randint(0, 1)
 
 
-def int_32_to_little_endian_list(n):
-    l = []
-    for i in xrange(0, 4):
-        l.append((n >> (i * 8)) & 255)
-    return l
-
-
 def build_directory_structure(run):
+    # Illumina output directory name:
+    # date (ddmmyy), machinename, four digit id, "_FC"
     os.mkdir(os.path.join(os.getcwd(), run.id + "_FC"))
     os.chdir(os.path.join(os.getcwd(), run.id + "_FC"))
     run.infopath = os.getcwd()
@@ -582,6 +597,7 @@ def build_directory_structure(run):
                                   'BaseCalls', 'L{:03d}'.format(l + 1)))
         lane.bcpath = os.path.join(os.getcwd(), 'Data', 'Intensities',
                                   'BaseCalls', 'L{:03d}'.format(l + 1))
+        # only nextseq machines do not create cycle directories in lane.bcpath
         if run.machinetype != "nextseq":
             cycle_idx = 0
             for read in run.reads:
@@ -603,19 +619,19 @@ def pp(elem):
 
 def usage():
     print("Usage:")
-    print(" -m <machine type>")
-    print(" Where machine type is one of:")
-    print("  " + ", ".join(machinetypes))
+    print(" $ ./bclaureate.py -m <machine type>")
+    print("Where machine type is one of:")
+    print(" " + ", ".join(machinetypes))
+    sys.exit(2)
 
 
 def main(argv):
     # http://www.diveintopython.net/scripts_and_streams/
     #  command_line_arguments.html"""
     try:
-        opts, args = getopt.getopt(argv, "m:", [])
+        opts, args = getopt.gnu_getopt(argv, "m:", [])
     except getopt.GetoptError:
         usage()
-        sys.exit(2)
     for opt, arg in opts:
         if opt in '-m':
             if arg in machinetypes:
@@ -624,7 +640,7 @@ def main(argv):
                     if max_params[arg][par] < PARAMS[par]:
                         print("value of parameter {} is greater ".format(par) +
                               "than machine's normal capabilities.")
-                        if (raw_input("Continue with max value?  ").lower()\
+                        if (raw_input("Run with max value instead?  ").lower()\
                                 not in ['y', 'yes']):
                             print("exiting...")
                             sys.exit(3)
@@ -638,17 +654,12 @@ def main(argv):
                 run.make_bcis(run.machinetype)
                 run.make_filters(run.machinetype)
                 run.make_locs(run.machinetype)
+                return
             else:
                 usage()
-            return
-            run = Run(arg)
-            build_directory_structure(run)
-            run.make_runinfo(run.machinetype)
-            run.make_bcls(run.machinetype)
-            run.make_bcis(run.machinetype)
-            run.make_filters(run.machinetype)
-            run.make_locs(run.machinetype)
-
-
+    else:
+        usage()
+      
 if __name__ == "__main__":
     main(sys.argv[1:])
+    sys.exit(0)
